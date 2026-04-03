@@ -17,6 +17,8 @@
         "where": true,
         "Get-Command": true,
         "mkdir": true,
-        "robocopy": true
+        "robocopy": true,
+        "git remote": true,
+        "git add": true
     }
 }
