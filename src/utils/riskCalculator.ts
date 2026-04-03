@@ -40,6 +40,18 @@ export interface PlatformData {
   riskHistory: { date: string; req: number; design: number; dev: number; integration: number; test: number }[];
 }
 
+export interface DepEdge {
+  source: string;
+  target: string;
+  weight: number;
+  label: string;
+}
+
+export interface DepGraphData {
+  nodes: string[];
+  edges: DepEdge[];
+}
+
 export function calculateReqRisk(req: RequirementsData): number {
   let risk = 0;
   risk += req.unresolvedDependencies * 15;
@@ -191,6 +203,40 @@ export function getRiskOverTimeData(data: PlatformData[]) {
     integration: risks.integration.reduce((a, b) => a + b, 0) / risks.integration.length,
     test: risks.test.reduce((a, b) => a + b, 0) / risks.test.length,
   })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+}
+
+export function getDependencyGraph(data: PlatformData[]): DepGraphData {
+  const nodes = ['requirements', 'design', 'development', 'integration', 'test'];
+  const edges: Record<string, DepEdge> = {};
+
+  const addEdge = (source: string, target: string, weight: number, label: string) => {
+    const key = `${source}->${target}`;
+    if (!edges[key]) {
+      edges[key] = { source, target, weight, label };
+    } else {
+      edges[key].weight += weight;
+    }
+  };
+
+  data.forEach(p => {
+    if (p.requirements.unresolvedDependencies > 0 || p.blockedDependencies.length > 0) {
+      addEdge('requirements', 'design', 10 + p.blockedDependencies.length * 5 + p.requirements.unresolvedDependencies * 3, 'Req dependency backflow');
+    }
+    if (p.development.velocityDrop > 15 || p.development.prChurn > 10) {
+      addEdge('development', 'integration', 10 + p.development.velocityDrop * 0.4 + p.development.prChurn * 0.8, 'Dev delivery slowdown');
+    }
+    if (p.integration.ciCdFailureRate > 10 || p.integration.unresolvedMergeConflicts > 0) {
+      addEdge('integration', 'test', 5 + p.integration.ciCdFailureRate * 0.3 + p.integration.unresolvedMergeConflicts * 4, 'Integration defect inflow');
+    }
+    if (p.test.defectEscapeRate > 20 || p.test.unresolvedCriticalBugs > 0) {
+      addEdge('test', 'requirements', 8 + p.test.defectEscapeRate * 0.3 + p.test.unresolvedCriticalBugs * 3, 'Test issue escalation to requirement');
+    }
+  });
+
+  return {
+    nodes,
+    edges: Object.values(edges),
+  };
 }
 
 export interface PhaseAnalysis {
